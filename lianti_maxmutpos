@@ -1,0 +1,52 @@
+#!/bin/bash
+
+function help()
+{
+cat<<END
+
+Usage: $(readlink -f ${0}) [options] [arg]
+Required: 
+	-i | --inputfile [lianti vcf file]
+	-o | --outfile [output file names]
+General:
+	-h | --help [Show the help message]
+
+Analysis Programs Created by wanhuihui [v1.1]
+END
+exit 0
+}
+ 
+ARGS=`getopt -o "hi:o:" -l "inputfile:,outfile:,help" -n $0 -- "$@"`
+ 
+eval set -- "${ARGS}"
+ 
+while true; do
+    case "${1}" in
+		-i|--inputfile)
+        shift;
+		inputfile=$(readlink -f ${1});shift
+		if [[ ! -f ${inputfile} ]]; then
+			echo "ERROR: inputfile [${inputfile}] is not exist";shift;help;
+        fi
+        ;;
+		-o|--outfile)
+        shift;
+		outfile=$(readlink -f ${1});shift
+		;;
+		-h|--help)
+        shift;help;exit
+		;;
+        --)
+        shift;
+        break;
+        ;;
+    esac
+done
+
+if [[ ! -n ${inputfile} || ! -n ${outfile} ]];then help;fi
+
+function lianti_maxmutpos()
+{
+	cat $inputfile |  awk 'BEGIN {FS="\t";OFS="\t"} {$4=toupper($4);$5=toupper($5);n5=split($5,a,",");split($10,b,":");split(b[2],c,",");split(b[3],d,",");for(i=1;i<=n5+1;i++){vd=c[i]+d[i];if(vd==$6){$5=a[i-1];$10="0/1:"c[1]","c[i]":"d[1]","d[i]}};print $0}'| awk 'BEGIN {FS="\t";OFS="\t"} {a=length($4);b=length($5);if(a==1||b==1||a==b){print $0};if(a>1&&b>1){if(a<b){t1=substr($4,2,a);t2=substr($5,2,a-1);if(t1==t2){$4=substr($4,1,1);c=substr($5,1,1);d=substr($5,a+1,b);$5=c""d;print $0};if(t1!=t2){x1=substr($5,1,1);x2=substr($5,2,b-a);y=substr($4,1,1);$5=x1""x2;$4=y;print $0}};if(a>b){t1=substr($4,2,b-1);t2=substr($5,2,b);if(t1==t2){$5=substr($5,1,1);c=substr($4,1,1);d=substr($4,b+1,a);$4=c""d;print $0};if(t1!=t2){x1=substr($4,1,1);x2=substr($4,2,a-b);y=substr($5,1,1);$4=x1""x2;$5=y;print $0}}}}' > $outfile
+}
+lianti_maxmutpos
