@@ -1,0 +1,109 @@
+#!/bin/bash
+
+function help()
+{
+cat<<END
+
+Usage: $(readlink -f ${0}) [options] [arg]
+Required: 
+	-r | --reference [hg19 fasta file]
+	-i | --inputfile [bamfile]
+	-o | --outfile [the prefix of output file names]
+Optional:
+	-t | --threads [Number of subprocesses used to running in parallel. Default: 4]
+	--pindel  [pindel_path]
+	--pindel2vcf [pindel2vcf_path]
+General:
+	-h | --help [Show the help message]
+
+Analysis Programs Created by wanhuihui [v1.1]
+END
+exit 0
+}
+ 
+ARGS=`getopt -o "hr:i:o:t:" -l "pindel:,pindel2vcf:,reference:,inputfile:,outfile:,help" -n $0 -- "$@"`
+ 
+eval set -- "${ARGS}"
+ 
+while true; do
+    case "${1}" in
+        --pindel)
+        shift;
+		pindel=${1};shift
+		if [[ ! -f ${pindel} ]]; then
+			echo "ERROR: pindel [${pindel}] is not exist";shift;help;
+        fi
+        ;;
+        --pindel2vcf)
+        shift;
+		pindel2vcf=${1};shift
+		if [[ ! -f ${pindel2vcf} ]]; then
+			echo "ERROR: pindel2vcf [${pindel2vcf}] is not exist";shift;help;
+        fi
+        ;;
+		-i|--inputfile)
+        shift;
+		inputfile=$(readlink -f ${1});shift
+		if [[ ! -f ${inputfile} ]]; then
+			echo "ERROR: inputfile [${inputfile}] is not exist";shift;help;
+        fi
+        ;;
+		-r|--reference)
+        shift;
+		ref=$(readlink -f ${1});shift
+		if [[ ! -f ${ref} ]]; then
+			echo "ERROR: reference [${ref}] is not exist";shift;help;
+        fi
+        ;;
+		-o|--outfile)
+        shift;
+		outfile=$(readlink -f ${1});shift
+		;;
+		-t|--threads)
+        shift;
+		threads=${1};shift
+		;;
+		-h|--help)
+        shift;help;exit
+		;;
+        --)
+        shift;
+        break;
+        ;;
+    esac
+done
+
+if [[ ! -n ${inputfile} || ! -n ${outfile} || ! -n ${ref} ]];then help;fi
+if [[ ! -n ${threads} ]];then threads=4;fi
+if [[ ! -n ${pindel} ]];then pindel=`which pindel`;fi
+if [[ ! -n ${pindel2vcf} ]];then pindel2vcf=`which pindel2vcf`;fi
+outdir=`dirname ${outfile}`
+i=`basename ${outfile}`
+
+function pindel_Analysis()
+{
+	echo -e "${inputfile}\t400\t${i}" > $outdir/${i}_pindel.config
+	{
+	###CALR
+	$pindel -f ${ref} -i $outdir/${i}_pindel.config -o $outdir/${i}_chr19 -T $threads -c chr19
+	$pindel2vcf -p $outdir/${i}_chr19_D -r ${ref} -R ucsc -d `date` -v $outdir/${i}_chr19_D.vcf
+	} &
+	{
+	###FLT3
+	$pindel -f ${ref} -i $outdir/${i}_pindel.config -o $outdir/${i}_chr13 -T $threads -c chr13
+	$pindel2vcf -p $outdir/${i}_chr13_SI -r $ref -R ucsc -d `date` -v $outdir/${i}_chr13_SI.vcf
+	$pindel2vcf -p $outdir/${i}_chr13_TD -r $ref -R ucsc -d `date` -v $outdir/${i}_chr13_TD.vcf
+	$pindel2vcf -p $outdir/${i}_chr13_LI -r $ref -R ucsc -d `date` -v $outdir/${i}_chr13_LI.vcf
+	} &
+	{
+	###TP53
+	$pindel -f ${ref} -i $outdir/${i}_pindel.config -o $outdir/${i}_chr17 -T $threads -c chr17
+	$pindel2vcf -p $outdir/${i}_chr17_SI -r $ref -R ucsc -d `date` -v $outdir/${i}_chr17_SI.vcf
+	$pindel2vcf -p $outdir/${i}_chr17_TD -r $ref -R ucsc -d `date` -v $outdir/${i}_chr17_TD.vcf
+	$pindel2vcf -p $outdir/${i}_chr17_LI -r $ref -R ucsc -d `date` -v $outdir/${i}_chr17_LI.vcf
+	} &
+	wait
+	echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t${i}" > $outdir/${i}_pindel.vcf
+	cat $outdir/${i}_chr19_D.vcf $outdir/${i}_chr13_SI.vcf $outdir/${i}_chr13_TD.vcf $outdir/${i}_chr13_LI.vcf $outdir/${i}_chr17_SI.vcf $outdir/${i}_chr17_TD.vcf $outdir/${i}_chr17_LI.vcf | awk 'BEGIN {FS=OFS="\t"} {if($1!~/#/){print $0}}' >> $outdir/${i}_pindel.vcf
+}
+pindel_Analysis
