@@ -1,0 +1,92 @@
+#!/bin/bash
+
+function help()
+{
+cat<<END
+
+Usage: $(readlink -f ${0}) [options] [arg]
+Required: 
+	-i | --inputfile [delly->bcftools-> vcf file]
+	-o | --outfile [the prefix of output file names]
+	-f | --fusion_related [fusion_related file]
+	-p | --probe [probe file]
+Optional:
+	--python [python3 path]
+	--filter [delly_filter.py path]
+General:
+	-h | --help [Show the help message]
+
+Analysis Programs Created by wanhuihui [v1.1]
+END
+exit 0
+}
+ 
+ARGS=`getopt -o "hi:o:f:p:" -l "inputfile:,outfile:,fusion_related:,probe:,python:,filter:,help" -n $0 -- "$@"`
+ 
+eval set -- "${ARGS}"
+ 
+while true; do
+    case "${1}" in
+		-i|--inputfile)
+        shift;
+		inputfile=$(readlink -f ${1});shift
+		if [[ ! -f ${inputfile} ]]; then
+			echo "ERROR: inputfile [${inputfile}] is not exist";shift;help;
+        fi
+        ;;
+		-o|--outfile)
+        shift;
+		outfile=$(readlink -f ${1});shift
+		;;
+		-f|--fusion_related)
+        shift;
+		fusion_related=$(readlink -f ${1});shift
+		if [[ ! -f ${fusion_related} ]]; then
+			echo "ERROR: fusion_related [${fusion_related}] is not exist";shift;help;
+        fi
+        ;;
+		-p|--probe)
+        shift;
+		probe=$(readlink -f ${1});shift
+		if [[ ! -f ${probe} ]]; then
+			echo "ERROR: probe [${probe}] is not exist";shift;help;
+        fi
+        ;;
+		--python)
+        shift;
+		python=$(readlink -f ${1});shift
+		if [[ ! -f ${python} ]]; then
+			echo "ERROR: python [${python}] is not exist";shift;help;
+        fi
+        ;;
+		--filter)
+        shift;
+		filter=$(readlink -f ${1});shift
+		if [[ ! -f ${filter} ]]; then
+			echo "ERROR: filter [${filter}] is not exist";shift;help;
+        fi
+        ;;
+		-h|--help)
+        shift;help;exit
+		;;
+        --)
+        shift;
+        break;
+        ;;
+    esac
+done
+
+outdir=`dirname ${outfile}`
+i=`basename ${outfile}`
+bin_dir=/usr/bin
+target_dir=/target
+if [[ ! -n ${inputfile} || ! -n ${outfile} || ! -n ${fusion_related} || ! -n ${probe} ]];then help;fi
+if [[ ! -n ${python} ]];then python=`which python3`;fi
+if [[ ! -n ${filter} ]];then filter=`which delly_filter.py`;fi
+
+function delly_filter()
+{
+	cat $inputfile | grep "BND" | awk '$7=="PASS"' > $outdir/${i}_translocation.vcf
+	$python $filter $outdir ${i} $fusion_related $probe
+}
+delly_filter
