@@ -1,0 +1,63 @@
+#!/bin/bash
+
+function help()
+{
+cat<<END
+
+Usage: $(readlink -f ${0}) [options] [arg]
+Required: 
+	-i | --inputfile1 [lianti qbase mutation txt]
+	-I | --inputfile2 [lianti depth mutation txt]
+	-o | --outfile [the prefix of output file names]
+General:
+	-h | --help [Show the help message]
+
+Analysis Programs Created by wanhuihui [v1.1]
+END
+exit 0
+}
+ 
+ARGS=`getopt -o "hi:I:o:" -l "inputfile1:,inputfile2:,outfile:,help" -n $0 -- "$@"`
+ 
+eval set -- "${ARGS}"
+ 
+while true; do
+    case "${1}" in
+		-i|--inputfile1)
+        shift;
+		inputfile1=$(readlink -f ${1});shift
+		if [[ ! -f ${inputfile1} ]]; then
+			echo "ERROR: inputfile1 [${inputfile1}] is not exist";shift;help;
+        fi
+        ;;
+		-I|--inputfile2)
+        shift;
+		inputfile2=$(readlink -f ${1});shift
+		if [[ ! -f ${inputfile2} ]]; then
+			echo "ERROR: inputfile2 [${inputfile2}] is not exist";shift;help;
+        fi
+        ;;
+		-o|--outfile)
+        shift;
+		outfile=$(readlink -f ${1});shift
+		;;
+		-h|--help)
+        shift;help;exit
+		;;
+        --)
+        shift;
+        break;
+        ;;
+    esac
+done
+
+if [[ ! -n ${inputfile1} || ! -n ${outfile} || ! -n ${inputfile2} ]];then help;fi
+outdir=`dirname ${outfile}`
+i=`basename ${outfile}`
+
+function lianti_qbase()
+{
+	echo -ne "Chr\tStart\tEnd\tRef\tAlt\tsum_alt\tsum_qbase\teach_qbase\ttag\n" > $outdir/${i}.lianti.qbase.xls
+	awk 'BEGIN {FS=OFS="\t"} NR==FNR {a[NR]=$91;next} {if(FNR!=1){q=a[FNR]/$91;if(q<20){t="no"} else {t="yes"};print $1,$2,$3,$4,$5,$91,a[FNR],q,t}}' $inputfile1 $inputfile2 >> $outdir/${i}.lianti.qbase.xls
+}
+lianti_qbase
