@@ -1,0 +1,113 @@
+#!/bin/bash
+
+function help()
+{
+cat<<END
+
+Usage: $(readlink -f ${0}) [options] [arg]
+Required: 
+	--pindel_table [pindel mutation table]
+	--lianti_table [lianti mutation table]
+	--aa_replace [AAchange replace file]
+	--mut_type [Mutation type replace file]
+	--gene_list [refGene gene replace file]
+	--aa_list [AAchange gene replace file]
+	--qbase [lianti qbase file]
+	-o | --outfile [the prefix of output file names]
+General:
+	-h | --help [Show the help message]
+
+Analysis Programs Created by wanhuihui [v1.1]
+END
+exit 0
+}
+ 
+ARGS=`getopt -o "ho:" -l "pindel_table:,lianti_table:,aa_replace:,mut_type:,gene_list:,aa_list:,qbase:,outfile:,help" -n $0 -- "$@"`
+ 
+eval set -- "${ARGS}"
+ 
+while true; do
+    case "${1}" in
+		--pindel_table)
+        shift;
+		pindel_table=$(readlink -f ${1});shift
+		if [[ ! -f ${pindel_table} ]]; then
+			echo "ERROR: pindel_table [${pindel_table}] is not exist";shift;help;
+        fi
+        ;;
+		--lianti_table)
+        shift;
+		lianti_table=$(readlink -f ${1});shift
+		if [[ ! -f ${lianti_table} ]]; then
+			echo "ERROR: lianti_table [${lianti_table}] is not exist";shift;help;
+        fi
+        ;;
+		--aa_replace)
+        shift;
+		aa_replace=$(readlink -f ${1});shift
+		if [[ ! -f ${aa_replace} ]]; then
+			echo "ERROR: aa_replace [${aa_replace}] is not exist";shift;help;
+        fi
+        ;;
+		--mut_type)
+        shift;
+		mut_type=$(readlink -f ${1});shift
+		if [[ ! -f ${mut_type} ]]; then
+			echo "ERROR: mut_type [${mut_type}] is not exist";shift;help;
+        fi
+        ;;
+		--gene_list)
+        shift;
+		gene_list=$(readlink -f ${1});shift
+		if [[ ! -f ${gene_list} ]]; then
+			echo "ERROR: gene_list [${gene_list}] is not exist";shift;help;
+        fi
+        ;;
+		--aa_list)
+        shift;
+		aa_list=$(readlink -f ${1});shift
+		if [[ ! -f ${aa_list} ]]; then
+			echo "ERROR: aa_list [${aa_list}] is not exist";shift;help;
+        fi
+        ;;
+		--qbase)
+        shift;
+		qbase=$(readlink -f ${1});shift
+		if [[ ! -f ${qbase} ]]; then
+			echo "ERROR: qbase [${qbase}] is not exist";shift;help;
+        fi
+        ;;
+		-o|--outfile)
+        shift;
+		outfile=$(readlink -f ${1});shift
+		;;
+		-h|--help)
+        shift;help;exit
+		;;
+        --)
+        shift;
+        break;
+        ;;
+    esac
+done
+
+if [[ ! -n ${pindel_table} || ! -n ${outfile} || ! -n ${lianti_table} || ! -n ${aa_replace} || ! -n ${mut_type} || ! -n ${gene_list} || ! -n ${aa_list} || ! -n ${qbase} ]];then help;fi
+outdir=`dirname ${outfile}`
+i=`basename ${outfile}`
+
+function Integration_mutation()
+{
+	cat $pindel_table $lianti_table | awk -F'\t' '!a[$1,$2,$3,$4,$5]++' | \
+	awk 'BEGIN {FS=OFS="\t"} NR==FNR {a[$1,$2,$3,$4,$5]=$6;next} {if(a[$1,$2,$3,$4,$5]!=""){$10=a[$1,$2,$3,$4,$5]};print $0}' $aa_replace - | \
+	awk 'BEGIN {FS=OFS="\t"} NR==FNR {a[$1,$2,$3,$4,$5]=$6;next} {if(a[$1,$2,$3,$4,$5]!=""){$9=a[$1,$2,$3,$4,$5]};print $0}' $mut_type - | \
+	awk 'BEGIN{FS=OFS="\t"}FNR>1&&FNR==NR{arry[$1]=$2}FNR<NR{if(!arry[$7]==NULL){$7=arry[$7]};print $0}' $gene_list - | \
+	awk 'BEGIN {FS=OFS="\t"} NR==FNR {a[$1]=$2;next} {n=split($10,b,":");for(i=1;i<=n;i++){if(a[b[i]]!=""){gsub(b[i],a[b[i]],$0);break}};print $0}' $aa_list - | \
+	awk 'BEGIN {FS=OFS="\t"}{if(NR==1||$6=="splicing"||$4=="-"||$5=="-"){print $0}else{n=split($10,a,",");s="";t=0;if(n==1){s=$10;t=1} else {for(i=1;i<n;i++){split(a[i],b,":");c1=substr(b[5],3,3);c2=substr(b[5],length(b[5])-2,3);if(c1!=c2){s=a[i]","s;t=t+1}}};$10=s;if(t>0){print $0}}}' > $outdir/${i}.hg19_multianno.xls
+	
+	cat $outdir/${i}.hg19_multianno.xls | awk 'BEGIN {FS="\t";OFS="\t"} {if((($14>=0.001)&&($14<0.01))||(NR==1)) {print $0}}'>$outdir/${i}.hg19_multianno_less.xls
+	cat $outdir/${i}.hg19_multianno.xls | awk 'BEGIN {FS="\t";OFS="\t"} {if(($14>=0.01)||(NR==1)) {print $0}}' | awk 'BEGIN {FS=OFS="\t"} NR==FNR {a[$1,$2,$3,$4,$5]=$9;next} {if(FNR==1){print $0} else {if(a[$1,$2,$3,$4,$5]!="no") {print $0}}}' ${qbase} - > $outdir/${i}.hg19_multianno_more.xls
+
+	cat $outdir/${i}.hg19_multianno_more.xls | awk 'BEGIN {FS="\t";OFS="\t"} {if((($15>=0.001)||($49>=0.001)||($52>=0.001))&&($14>=0.2)||(NR==1)) {print $0}}'>$outdir/${i}.snp.xls
+	cat $outdir/${i}.hg19_multianno_more.xls | awk 'BEGIN {FS="\t";OFS="\t"} {if((($15<0.001)&&($49<0.001)&&($52<0.001))||(($14<0.2)&&($14>0))||(NR==1)) {print $0}}'|awk 'BEGIN {FS="\t";OFS="\t"} {if(!((($15>=0.001)||($49>=0.001)||($52>=0.001))&&($14<0.2))) {print $0}}'>$outdir/${i}.nsnp.xls
+}
+Integration_mutation
