@@ -1,0 +1,78 @@
+#!/bin/bash
+
+function help()
+{
+cat<<END
+
+Usage: $(readlink -f ${0}) [options] [arg]
+Required: 
+	-i | --inputfile [bam file]
+	-b | --bed [bed file]
+	-f | --fasta [hg19 fasta file]
+	-o | --outfile [output file names]
+Optional:
+	--lianti [lianti path]
+General:
+	-h | --help [Show the help message]
+
+Analysis Programs Created by wanhuihui [v1.1]
+END
+exit 0
+}
+ 
+ARGS=`getopt -o "hi:o:b:f:" -l "inputfile:,outfile:,bed:,fasta:,lianti:,help" -n $0 -- "$@"`
+ 
+eval set -- "${ARGS}"
+ 
+while true; do
+    case "${1}" in
+		-i|--inputfile)
+        shift;
+		inputfile=$(readlink -f ${1});shift
+		if [[ ! -f ${inputfile} ]]; then
+			echo "ERROR: inputfile [${inputfile}] is not exist";shift;help;
+        fi
+        ;;
+		-b|--bed)
+        shift;
+		bed=$(readlink -f ${1});shift
+		if [[ ! -f ${bed} ]]; then
+			echo "ERROR: bed [${bed}] is not exist";shift;help;
+        fi
+        ;;
+		-f|--fasta)
+        shift;
+		fasta=$(readlink -f ${1});shift
+		if [[ ! -f ${fasta} ]]; then
+			echo "ERROR: fasta [${fasta}] is not exist";shift;help;
+        fi
+        ;;
+		--lianti)
+        shift;
+		lianti=$(readlink -f ${1});shift
+		if [[ ! -f ${lianti} ]]; then
+			echo "ERROR: lianti [${lianti}] is not exist";shift;help;
+        fi
+        ;;
+		-o|--outfile)
+        shift;
+		outfile=$(readlink -f ${1});shift
+		;;
+		-h|--help)
+        shift;help;exit
+		;;
+        --)
+        shift;
+        break;
+        ;;
+    esac
+done
+
+if [[ ! -n ${inputfile} || ! -n ${outfile} || ! -n ${bed} || ! -n ${fasta} ]];then help;fi
+if [[ ! -n ${lianti} ]];then lianti=`which lianti`;fi
+
+function lianti()
+{
+	$lianti pileup -N 100000 -b ${bed} -T 20 -C -d -cf $fasta $inputfile > $outfile
+}
+lianti
