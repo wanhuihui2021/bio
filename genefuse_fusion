@@ -1,0 +1,112 @@
+#!/bin/bash
+
+function help()
+{
+cat<<END
+
+Usage: $(readlink -f ${0}) [options] [arg]
+Required: 
+	-i | --fq1 [fq1 file]
+	-I | --fq2 [fq2 file]
+	-g | --genefuse_genes [cancer.hg19.csv]
+	-f | --ref [hg19 fasta]
+	-o | --outfile [prefix of output file names]
+Optional:
+	-t | --thread [thread]
+	--genefuse [genefuse path]
+	--python [python3 path]
+	--select [select.py]
+General:
+	-h | --help [Show the help message]
+
+Analysis Programs Created by wanhuihui [v1.1]
+END
+exit 0
+}
+ 
+ARGS=`getopt -o "i:I:,g:,f:,t:,o:" -l "fq1:,fq2:,genefuse_genes:,ref:,outfile:,thread:,genefuse:,python:,select:,help" -n $0 -- "$@"`
+ 
+eval set -- "${ARGS}"
+ 
+while true; do
+    case "${1}" in
+		-i|--fq1)
+        shift;
+		fq1=$(readlink -f ${1});shift
+		if [[ ! -f ${fq1} ]]; then
+			echo "ERROR: fq1 [${fq1}] is not exist";shift;help;
+        fi
+        ;;
+		-I|--fq2)
+        shift;
+		fq2=$(readlink -f ${1});shift
+		if [[ ! -f ${fq2} ]]; then
+			echo "ERROR: fq2 [${fq2}] is not exist";shift;help;
+        fi
+        ;;
+		-g|--genefuse_genes)
+        shift;
+		genefuse_genes=$(readlink -f ${1});shift
+		if [[ ! -f ${genefuse_genes} ]]; then
+			echo "ERROR: genefuse_genes [${genefuse_genes}] is not exist";shift;help;
+        fi
+        ;;
+		-f|--ref)
+        shift;
+		ref=$(readlink -f ${1});shift
+		if [[ ! -f ${ref} ]]; then
+			echo "ERROR: ref [${ref}] is not exist";shift;help;
+        fi
+        ;;
+		-t|--thread)
+        shift;
+		thread=${1};shift
+        ;;
+		--genefuse)
+        shift;
+		genefuse=$(readlink -f ${1});shift
+		if [[ ! -f ${genefuse} ]]; then
+			echo "ERROR: genefuse [${genefuse}] is not exist";shift;help;
+        fi
+        ;;
+		--python)
+        shift;
+		python=$(readlink -f ${1});shift
+		if [[ ! -f ${python} ]]; then
+			echo "ERROR: python [${python}] is not exist";shift;help;
+        fi
+        ;;
+		--select)
+        shift;
+		select=$(readlink -f ${1});shift
+		if [[ ! -f ${select} ]]; then
+			echo "ERROR: select [${select}] is not exist";shift;help;
+        fi
+        ;;
+		-o|--outfile)
+        shift;
+		outfile=$(readlink -f ${1});shift
+		;;
+		-h|--help)
+        shift;help;exit
+		;;
+        --)
+        shift;
+        break;
+        ;;
+    esac
+done
+
+if [[ ! -n ${thread} ]];then thread=4;fi
+if [[ ! -n ${genefuse} ]];then genefuse=`which genefuse`;fi 
+if [[ ! -n ${python} ]];then python=`which python3`;fi 
+if [[ ! -n ${select} ]];then select=`which select.py`;fi 
+if [[ ! -n ${fq1} || ! -n ${fq2} || ! -n ${genefuse_genes} || ! -n ${outfile} || ! -n ${ref} ]];then help;fi
+outdir=`dirname ${outfile}`
+i=`basename ${outfile}`
+function lianti()
+{
+	$genefuse --read1 $fq1 --read2 $fq2 --fusion $genefuse_genes --ref $ref -U -t $thread --html $outdir/${i}.fusion.html --json $outdir/${i}.fusion.json > $outdir/${i}.fusion.txt
+	$python $select $outdir/${i}.fusion.txt
+}
+lianti
